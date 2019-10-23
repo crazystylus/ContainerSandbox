@@ -45,9 +45,10 @@ func child() {
 	cg()
 	syscall.Sethostname([]byte("jail"))
 	//syscall.Chroot("ubuntu")
-	//syscall.Chdir("/")
-	//syscall.Mount("proc", "/proc", "proc", 0, "")
-	//syscall.Mount("tempfs", "/dev", "tempfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
+
+	syscall.Mount("proc", "/proc", "proc", 0, "")
+	syscall.Mount("tempfs", "/dev", "tempfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
+	syscall.Chdir("/home/sandbox")
 	iTime, err := strconv.ParseInt(os.Args[2], 10, 64)
 	if err != nil {
 		fmt.Printf("\nTimeout invalid\n")
@@ -62,13 +63,14 @@ func child() {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	//cmd.SysProcAttr = &syscall.SysProcAttr{}
-	//cmd.SysProcAttr.Credential = &syscall.Credential{Uid: 1000, Gid: 1000}
+	cmd.SysProcAttr = &syscall.SysProcAttr{}
+	cmd.SysProcAttr.Credential = &syscall.Credential{Uid: 1000, Gid: 1000}
 	cmd.Run()
 	if ctx.Err() == context.DeadlineExceeded {
 		fmt.Printf("\n Deadline Exceeded \n")
 	}
-	//syscall.Unmount("/proc", 0)
+	syscall.Unmount("/proc", 0)
+	syscall.Unmount("/dev", 0)
 }
 
 func cg() {
