@@ -1,13 +1,18 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"os/exec"
+	"path/filepath"
+	"strconv"
 	"syscall"
+	"time"
 )
 
-// docker 			run	<cmd>	<params>
+// docker 			run	 <duration>	<cmd>	<params>
 // go run main.go	run	<cmd>	<params>
 
 func main() {
@@ -22,8 +27,7 @@ func main() {
 }
 
 func run() {
-	fmt.Printf("Running %v as %d\n", os.Args[2:], os.Getpid())
-
+	fmt.Printf("Running %v as %d\n", os.Args[3:], os.Getpid())
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
@@ -36,21 +40,48 @@ func run() {
 }
 
 func child() {
-	fmt.Printf("Running %v as %d\n", os.Args[2:], os.Getpid())
+	fmt.Printf("Running %v as %d\n", os.Args[3:], os.Getpid())
 
-	syscall.Sethostname([]byte("container"))
-	syscall.Chroot("ubuntu")
-	syscall.Chdir("/")
-	syscall.Mount("proc", "proc", "proc", 0, "")
+	cg()
+	syscall.Sethostname([]byte("jail"))
+	//syscall.Chroot("ubuntu")
+	//syscall.Chdir("/")
+	//syscall.Mount("proc", "/proc", "proc", 0, "")
+	//syscall.Mount("tempfs", "/dev", "tempfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
+	iTime, err := strconv.ParseInt(os.Args[2], 10, 64)
+	if err != nil {
+		fmt.Printf("\nTimeout invalid\n")
+		return
+	}
+	// Handling String to int converstion for timeout
 
-	cmd := exec.Command(os.Args[2], os.Args[3:]...)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(iTime)*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, os.Args[3], os.Args[4:]...)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-
+	//cmd.SysProcAttr = &syscall.SysProcAttr{}
+	//cmd.SysProcAttr.Credential = &syscall.Credential{Uid: 1000, Gid: 1000}
 	cmd.Run()
+	if ctx.Err() == context.DeadlineExceeded {
+		fmt.Printf("\n Deadline Exceeded \n")
+	}
+	//syscall.Unmount("/proc", 0)
+}
 
-	syscall.Unmount("/proc", 0)
+func cg() {
+	cgroups := "/sys/fs/cgroup/"
+	pids := filepath.Join(cgroups, "pids")
+	os.Mkdir(filepath.Join(pids, "ourContainer"), 0755)
+	ioutil.WriteFile(filepath.Join(pids, "ourContainer/pids.max"), []byte("10"), 0700)
+	//Limiting max pids to 10
+
+	ioutil.WriteFile(filepath.Join(pids, "ourContainer/notify_on_release"), []byte("1"), 0700)
+
+	ioutil.WriteFile(filepath.Join(pids, "ourContainer/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)
+	// up here we write container PIDs to cgroup.procs
 }
 
 func must(err error) {
