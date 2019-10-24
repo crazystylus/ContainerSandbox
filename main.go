@@ -92,31 +92,26 @@ func child() {
 	}
 	syscall.Unmount("/proc", 0)
 	syscall.Unmount("/dev", 0)
-	//syscall.Unmount("/sys/class/net/", 0)
 }
 
 //Temporary manual cgroup function
 func cg() {
 	cgroups := "/sys/fs/cgroup/"
+
 	pids := filepath.Join(cgroups, "pids")
 	os.Mkdir(filepath.Join(pids, "ourContainer"), 0755)
 	ioutil.WriteFile(filepath.Join(pids, "ourContainer/pids.max"), []byte("10"), 0700)
-	//Limiting max pids to 10
-
 	ioutil.WriteFile(filepath.Join(pids, "ourContainer/notify_on_release"), []byte("1"), 0700)
-
 	ioutil.WriteFile(filepath.Join(pids, "ourContainer/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)
-	// up here we write container PIDs to cgroup.procs
+	//Limiting max pids to 10
 
 	mems := filepath.Join(cgroups, "memory")
 	memLimit := "175M"
 	os.Mkdir(filepath.Join(mems, "ourContainer"), 0755)
-
 	ioutil.WriteFile(filepath.Join(mems, "ourContainer/memory.limit_in_bytes"), []byte(memLimit), 0700)
-	//Limiting total memory sum of the ps tree to memLimit
 	ioutil.WriteFile(filepath.Join(mems, "ourContainer/notify_on_release"), []byte("1"), 0700)
-
 	ioutil.WriteFile(filepath.Join(mems, "ourContainer/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)
+	//Limiting total memory sum of the ps tree to memLimit
 }
 
 func must(err error) {
