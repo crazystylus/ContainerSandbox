@@ -33,7 +33,11 @@ func run() {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 	cmd.SysProcAttr = &syscall.SysProcAttr{
-		Cloneflags:   syscall.CLONE_NEWUTS | syscall.CLONE_NEWPID | syscall.CLONE_NEWNS,
+		Cloneflags: syscall.CLONE_NEWUTS |
+			syscall.CLONE_NEWPID |
+			syscall.CLONE_NEWIPC |
+			syscall.CLONE_NEWNS |
+			syscall.CLONE_NEWNET,
 		Unshareflags: syscall.CLONE_NEWNS,
 	}
 	cmd.Run()
@@ -48,6 +52,7 @@ func child() {
 
 	syscall.Mount("proc", "/proc", "proc", 0, "")
 	syscall.Mount("tempfs", "/dev", "tempfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
+	//syscall.Mount("temfs", "/sys/class/net/", "tempfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
 	syscall.Chdir("/home/sandbox")
 	iTime, err := strconv.ParseInt(os.Args[2], 10, 64)
 	if err != nil {
@@ -71,6 +76,7 @@ func child() {
 	}
 	syscall.Unmount("/proc", 0)
 	syscall.Unmount("/dev", 0)
+	//syscall.Unmount("/sys/class/net/", 0)
 }
 
 func cg() {
