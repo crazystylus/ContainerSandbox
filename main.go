@@ -27,6 +27,16 @@ func main() {
 }
 
 func run() {
+	// Mount tempfs on /sys/fs/cgroup
+	syscall.Mount("cgroup_root", "/sys/fs/cgroup", "tmpfs", 0, "")
+
+	// Creating CGroup required mounts
+	mounts := []string{"pids", "memory", "cpu,cpuacct", "blkio", "cpuset", "devices"}
+	for _, mnt := range mounts {
+		must(os.MkdirAll(filepath.Join("/sys/fs/cgroup/", mnt), os.ModePerm))
+		must(syscall.Mount(mnt, filepath.Join("/sys/fs/cgroup/", mnt), "cgroup", 0, mnt))
+	}
+
 	fmt.Printf("Running %v as %d\n", os.Args[3:], os.Getpid())
 	cmd := exec.Command("/proc/self/exe", append([]string{"child"}, os.Args[2:]...)...)
 	cmd.Stdin = os.Stdin
@@ -41,6 +51,13 @@ func run() {
 		Unshareflags: syscall.CLONE_NEWNS,
 	}
 	cmd.Run()
+
+	//Cleaning up cgroup mounts
+	for _, mnt := range mounts {
+		must(syscall.Unmount(filepath.Join("/sys/fs/cgroup/", mnt), 0))
+		must(os.RemoveAll(filepath.Join("/sys/fs/cgroup/", mnt)))
+	}
+	must(syscall.Unmount("/sys/fs/cgroup", 0))
 }
 
 func child() {
@@ -52,7 +69,6 @@ func child() {
 
 	syscall.Mount("proc", "/proc", "proc", 0, "")
 	syscall.Mount("tempfs", "/dev", "tempfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
-	//syscall.Mount("temfs", "/sys/class/net/", "tempfs", syscall.MS_NOSUID|syscall.MS_STRICTATIME, "mode=755")
 	syscall.Chdir("/home/sandbox")
 	iTime, err := strconv.ParseInt(os.Args[2], 10, 64)
 	if err != nil {
@@ -79,6 +95,7 @@ func child() {
 	//syscall.Unmount("/sys/class/net/", 0)
 }
 
+//Temporary manual cgroup function
 func cg() {
 	cgroups := "/sys/fs/cgroup/"
 	pids := filepath.Join(cgroups, "pids")
@@ -90,6 +107,16 @@ func cg() {
 
 	ioutil.WriteFile(filepath.Join(pids, "ourContainer/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)
 	// up here we write container PIDs to cgroup.procs
+
+	mems := filepath.Join(cgroups, "memory")
+	memLimit := "175M"
+	os.Mkdir(filepath.Join(mems, "ourContainer"), 0755)
+
+	ioutil.WriteFile(filepath.Join(mems, "ourContainer/memory.limit_in_bytes"), []byte(memLimit), 0700)
+	//Limiting total memory sum of the ps tree to memLimit
+	ioutil.WriteFile(filepath.Join(mems, "ourContainer/notify_on_release"), []byte("1"), 0700)
+
+	ioutil.WriteFile(filepath.Join(mems, "ourContainer/cgroup.procs"), []byte(strconv.Itoa(os.Getpid())), 0700)
 }
 
 func must(err error) {
